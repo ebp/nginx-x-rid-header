@@ -50,9 +50,6 @@ void uuid_fmt22(uuid_t* u, u_char* buf) {
             block = block / base;
         }
     }
-
-    // hi+lo = 2xlen
-    buf[len*2] = '\0';
 }
 
 ngx_int_t ngx_x_rid_header_get_variable(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
