@@ -1,29 +1,10 @@
 Original: newobj/nginx-x-rid-header
-
-* gabor / nginx-x-rid-header
- - Adds FreeBSD support
-
-* emiddleton / nginx-x-rid-header
- - forked from kevsmith with no changes
-
-* Fivestarsoftware / nginx-x-rid-header
- - forked from nuoyan with no changes
-
-* nuoyan / nginx-x-rid-header
- - forked from skeptomai with no changes
-
-* skeptomai / nginx-x-rid-header
- - forked from kevsmith with only documentation changes
-
-* kevsmith / nginx-x-rid-header
- - rips out most of the multi-platform ifdefs in favour of linux
- - no other functional changes
-
-* thainb / nginx-x-rid-header
- - forked from sharethrough with no changes
-
-* sharethrough / nginx-x-rid-header
- - uses V1 UUIDs (time & node (MAC)) rather than V4 UUIDs (random data)
-
-* drmingdrmer / nginx-x-rid-header
- - forked from newobj with no changes
+|- drmingdrmer / nginx-x-rid-header              - no changes
+|- sharethrough / nginx-x-rid-header             - uses V1 UUIDs (time & node (MAC)) rather than V4 UUIDs (random data)
+|  \ thainb / nginx-x-rid-header                 - no changes
+|- gabor / nginx-x-rid-header                    - Adds FreeBSD support
+\  kevsmith / nginx-x-rid-header                 - rips out most of the multi-platform ifdefs in favour of linux
+   |- emiddleton / nginx-x-rid-header            - no changes
+   \  skeptomai / nginx-x-rid-header             - only documentation changes
+      \  nuoyan / nginx-x-rid-header             - no changes
+         \ Fivestarsoftware / nginx-x-rid-header - with no changes
