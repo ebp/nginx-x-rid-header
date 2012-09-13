@@ -2,11 +2,12 @@
 #include <ngx_http.h>
 #include <nginx.h>
 #include <ngx_http_variables.h>
+#include <sys/types.h>
 
 #if (NGX_FREEBSD)
 #error FreeBSD is not supported yet, sorry.
 #elif (NGX_LINUX)
-#include <uuid.h>
+#include <ossp/uuid.h>
 #elif (NGX_SOLARIS)
 #error Solaris is not supported yet, sorry.
 #elif (NGX_DARWIN)
@@ -17,10 +18,48 @@
 //
 // * make the name of the variable configurable
 
+// Convert an array of 8 bytes into a 64 bit unsigned int
+u_int64_t bits2uint64(u_char* const bits) {
+   return ((u_int64_t)bits[0] << 56)
+        | ((u_int64_t)bits[1] << 48)
+        | ((u_int64_t)bits[2] << 40)
+        | ((u_int64_t)bits[3] << 32)
+        | ((u_int64_t)bits[4] << 24)
+        | ((u_int64_t)bits[5] << 16)
+        | ((u_int64_t)bits[6] <<  8)
+        |  (u_int64_t)bits[7];
+}
+
+// Format the UUID as 22 characters in base58
+void uuid_fmt22(uuid_t* u, u_char* buf) {
+    static const int len = 11;
+    static const int base = 58;
+    static const char digits[] =
+        "abcdefghijklmnopqrstuvwxyz"
+        "ABCDEFGHJKLMNOPQRSTUVWXYZ"
+        "2345679"; // Excludes I180
+
+    int i,j;
+
+    // for hi/lo of 128 bits
+    for (i=0; i < 2; i++) {
+        u_int64_t block = bits2uint64((u_char*)u+(i*8));
+
+        for (j=0; j < len; j++) {
+            buf[j+(i*len)] = digits[block % base];
+            block = block / base;
+        }
+    }
+
+    // hi+lo = 2xlen
+    buf[len*2] = '\0';
+}
+
 ngx_int_t ngx_x_rid_header_get_variable(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
   u_char *p;
 
-  p = ngx_pnalloc(r->pool, 37);
+  // Prepare 22 bytes to store the base58 string
+  p = ngx_pnalloc(r->pool, 22);
   if (p == NULL) {
       return NGX_ERROR;
   }
@@ -29,6 +68,8 @@ ngx_int_t ngx_x_rid_header_get_variable(ngx_http_request_t *r, ngx_http_variable
 #error FreeBSD is not supported yet, sorry.
 #elif (NGX_LINUX)
   uuid_t* uuid;
+
+  // return of uuid_s_ok = 0
   if ( uuid_create(&uuid) ) {
     return -1;
   }
@@ -36,21 +77,19 @@ ngx_int_t ngx_x_rid_header_get_variable(ngx_http_request_t *r, ngx_http_variable
     uuid_destroy(uuid);
     return -1;
   }
-  size_t data_len = 37;
-  if ( uuid_export(uuid, UUID_FMT_STR, &p, &data_len) ) {
-    uuid_destroy(uuid);
-    return -1;
-  }
+
+  // at this point we have 16 bytes in "uuid", ready for conversion
+  uuid_fmt22(uuid, p);
   uuid_destroy(uuid);
 #elif (NGX_SOLARIS)
 #error Solaris is not supported yet, sorry.
 #elif (NGX_DARWIN)
   uuid_t uuid;
   uuid_generate(uuid);
-  uuid_unparse_lower(uuid, (char*)p);
+  uuid_fmt22(uuid, p);
 #endif
 
-  v->len = 36;
+  v->len = 22;
   v->valid = 1;
   v->no_cacheable = 0;
   v->not_found = 0;
