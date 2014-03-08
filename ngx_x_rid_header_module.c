@@ -18,6 +18,9 @@
 //
 // * make the name of the variable configurable
 
+static ngx_table_elt_t *
+search_headers_in(ngx_http_request_t *r, u_char *name, size_t len);
+
 // Convert an array of 8 bytes into a 64 bit unsigned int
 u_int64_t bits2uint64(u_char* const bits) {
    return ((u_int64_t)bits[0] << 56)
@@ -52,39 +55,50 @@ void uuid_fmt22(uuid_t* u, u_char* buf) {
     }
 }
 
-ngx_int_t ngx_x_rid_header_get_variable(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
-  u_char *p;
+static ngx_str_t  ngx_x_rid_header_name = ngx_string("x-request-id");
 
-  // Prepare 22 bytes to store the base58 string
-  p = ngx_pnalloc(r->pool, 22);
-  if (p == NULL) {
-      return NGX_ERROR;
+ngx_int_t ngx_x_rid_header_get_variable(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
+  u_char            *p;
+  ngx_table_elt_t   *header;
+
+  header = search_headers_in(r, ngx_x_rid_header_name.data, ngx_x_rid_header_name.len);
+
+  if (header != NULL && header->value.len == 22) {
+      // Reuse existing header
+      p = header->value.data;
   }
+  else {
+      // Prepare 22 bytes to store the base58 string
+      p = ngx_pnalloc(r->pool, 22);
+      if (p == NULL) {
+          return NGX_ERROR;
+      }
 
 #if (NGX_FREEBSD)
 #error FreeBSD is not supported yet, sorry.
 #elif (NGX_LINUX)
-  uuid_t* uuid;
+      uuid_t* uuid;
 
-  // return of uuid_s_ok = 0
-  if ( uuid_create(&uuid) ) {
-    return -1;
-  }
-  if ( uuid_make(uuid, UUID_MAKE_V4) ) {
-    uuid_destroy(uuid);
-    return -1;
-  }
+      // return of uuid_s_ok = 0
+      if ( uuid_create(&uuid) ) {
+        return -1;
+      }
+      if ( uuid_make(uuid, UUID_MAKE_V4) ) {
+        uuid_destroy(uuid);
+        return -1;
+      }
 
-  // at this point we have 16 bytes in "uuid", ready for conversion
-  uuid_fmt22(uuid, p);
-  uuid_destroy(uuid);
+      // at this point we have 16 bytes in "uuid", ready for conversion
+      uuid_fmt22(uuid, p);
+      uuid_destroy(uuid);
 #elif (NGX_SOLARIS)
 #error Solaris is not supported yet, sorry.
 #elif (NGX_DARWIN)
-  uuid_t uuid;
-  uuid_generate(uuid);
-  uuid_fmt22(uuid, p);
+      uuid_t uuid;
+      uuid_generate(uuid);
+      uuid_fmt22(uuid, p);
 #endif
+  }
 
   v->len = 22;
   v->valid = 1;
@@ -105,6 +119,41 @@ static ngx_int_t ngx_x_rid_header_add_variables(ngx_conf_t *cf)
   }
   var->get_handler = ngx_x_rid_header_get_variable;
   return NGX_OK;
+}
+
+static ngx_table_elt_t *
+search_headers_in(ngx_http_request_t *r, u_char *name, size_t len)
+{
+	ngx_list_part_t            *part;
+	ngx_table_elt_t            *h;
+	ngx_uint_t                  i;
+
+	part = &r->headers_in.headers.part;
+	h = part->elts;
+
+	// Headers array may consist of more than one part, so loop throgh all of them
+	for (i = 0; ; i++) {
+		if (i >= part->nelts) {
+			if (part->next == NULL) {
+				break;
+			}
+
+			part = part->next;
+			h = part->elts;
+			i = 0;
+		}
+
+		// Compare names case insensitively
+		if (len != h[i].key.len || ngx_strcasecmp(name, h[i].key.data) != 0) {
+			continue;
+		}
+
+		// Found it
+		return &h[i];
+	}
+
+	// no header was found
+	return NULL;
 }
 
 static ngx_http_module_t  ngx_x_rid_header_module_ctx = {
