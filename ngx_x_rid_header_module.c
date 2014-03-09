@@ -58,16 +58,24 @@ void uuid_fmt22(uuid_t* u, u_char* buf) {
 static ngx_str_t  ngx_x_rid_header_name = ngx_string("x-request-id");
 
 ngx_int_t ngx_x_rid_header_get_variable(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
-  u_char            *p;
+  u_char            *p         = NULL;
   ngx_table_elt_t   *header;
+  ngx_str_t          hv;
+  size_t             hlen      = 22;
 
   header = search_headers_in(r, ngx_x_rid_header_name.data, ngx_x_rid_header_name.len);
 
-  if (header != NULL && header->value.len == 22) {
-      // Reuse existing header
-      p = header->value.data;
+  if (header != NULL) {
+      hv = header->value;
+
+      if (hv.len >= 20 && hv.len <= 50) {
+          // Reuse existing header
+          hlen = hv.len;
+          p = hv.data;
+      }
   }
-  else {
+
+  if (p == NULL) {
       // Prepare 22 bytes to store the base58 string
       p = ngx_pnalloc(r->pool, 22);
       if (p == NULL) {
@@ -100,7 +108,7 @@ ngx_int_t ngx_x_rid_header_get_variable(ngx_http_request_t *r, ngx_http_variable
 #endif
   }
 
-  v->len = 22;
+  v->len = hlen;
   v->valid = 1;
   v->no_cacheable = 0;
   v->not_found = 0;
